@@ -2,11 +2,15 @@ package com.hojeda.algorithmikasos.collection
 
 class CounterList<T> : MutableList<T> {
 
+    private constructor(delegate: MutableList<T> = mutableListOf<T>()) {
+        this.delegate = delegate
+    }
+
     companion object {
         fun <T> counterList(): CounterList<T> = CounterList()
     }
 
-    private val delegate = mutableListOf<T>()
+    private val delegate: MutableList<T>
     private var blockCount = false
     override val size: Int
         get() = delegate.size
@@ -22,12 +26,12 @@ class CounterList<T> : MutableList<T> {
     }
 
     override fun get(index: Int): T {
-        reads = reads.inc()
+        if (blockCount.not()) reads = reads.inc()
         return delegate[index]
     }
 
     fun get(index: Int, count: Boolean): T {
-        if (count && blockCount.not()) reads = reads.inc()
+        if (count.and(blockCount.not())) reads = reads.inc()
         return delegate[index]
     }
 
@@ -120,4 +124,6 @@ class CounterList<T> : MutableList<T> {
         blockCount = false
         return this
     }
+
+    fun copy() = CounterList(this.delegate.toMutableList())
 }
