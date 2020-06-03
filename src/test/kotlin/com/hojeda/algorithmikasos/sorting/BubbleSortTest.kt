@@ -10,11 +10,11 @@ import java.math.MathContext
 class BubbleSortTest {
 
     companion object {
-        val target = BubbleSort
+        private val target = BubbleSort
 
-        val longComparator = Comparator<Long> { o1, o2 -> o1.compareTo(o2) }
+        private val longComparator = Comparator<Long> { o1, o2 -> o1.compareTo(o2) }
 
-        val generateUnorderedList: (Int, Short) -> CounterList<Long> = { digits, size ->
+        private val generateUnorderedList: (Int, Short) -> CounterList<Long> = { digits, size ->
             CounterList.counterList<Long>().also { list ->
                 (1..size).map {
                     list.add(Math.random().times(BigDecimal.TEN.pow(digits).toDouble()).toLong())
