@@ -9,54 +9,111 @@ import java.math.MathContext
 
 class BubbleSortTest {
 
-    @Test
-    fun `When sorting a list the max reads should be less or equal to n^2`() {
+    companion object {
         val target = BubbleSort
-        val givenRange = 1..20
-        val givenRangeSize = givenRange.toList().size
 
-        val givenUnorderedList = CounterList.counterList<Long>().also { list ->
-            givenRange.map {
-                list.add(Math.random().times(100).toLong())
-            }
-        }.blockCount()
+        val longComparator = Comparator<Long> { o1, o2 -> o1.compareTo(o2) }
 
-        println("Unordered list -> $givenUnorderedList")
-
-        val sortedList = target.sort(
-            givenUnorderedList.enableCount(),
-            Comparator { o1, o2 -> o1.compareTo(o2) }
-        ).blockCount()
-
-        println("Sorted list -> $sortedList, with reads: ${sortedList.reads}")
-
-        val maxReads = givenRangeSize.toBigDecimal().pow(2).longValueExact()
-
-        assertThat(sortedList.reads, lessThanOrEqualTo(maxReads))
-    }
-
-    @Test
-    fun `test`() {
-        val target = BubbleSort
-        val givenRange = 1..20
-        val readsComparator = Comparator<CounterList<Long>> { o1, o2 -> o1.reads.compareTo(o2.reads) }
-        val givenRangeSize = givenRange.toList().size
-
-        val generateUnorderedList: () -> CounterList<Long> = {
+        val generateUnorderedList: (Int, Short) -> CounterList<Long> = { digits, size ->
             CounterList.counterList<Long>().also { list ->
-                givenRange.map {
-                    list.add(Math.random().times(100).toLong())
+                (1..size).map {
+                    list.add(Math.random().times(BigDecimal.TEN.pow(digits).toDouble()).toLong())
                 }
             }.blockCount()
         }
+    }
+
+    @Test
+    fun `When sorting a list with normal sort the result should be a sorted list`() {
+        val givenListSize = 20
+        val givenDigits = 3
+
+        val givenUnorderedList = generateUnorderedList(givenDigits, givenListSize.toShort()).enableCount()
+
+        val sortedList = target.sort(
+            givenUnorderedList.enableCount(), longComparator
+        ).blockCount()
+
+        println("Unordered list -> $givenUnorderedList")
+        println("Sorted list -> $sortedList")
+
+        sortedList.forEachIndexed { index, value ->
+            if (index < sortedList.lastIndex) assertThat(value, lessThanOrEqualTo(sortedList[index.inc()]))
+        }
+    }
+
+    @Test
+    fun `When sorting a list with normal sort the max reads should be equal to n(pow)2`() {
+        val n = BigDecimal.valueOf(20)
+        val givenDigits = 3
+
+        val sortedList = target.sort(
+            generateUnorderedList(givenDigits, n.toShort()).enableCount(),
+            longComparator
+        )
+
+        val expectedReads = n.pow(2)
+
+        println("Real reads: ${sortedList.reads}")
+        println("Expected reads: $expectedReads")
+
+        assertThat(sortedList.reads, equalTo(expectedReads.toLong()))
+    }
+
+    @Test
+    fun `When sorting a set of lists with normal sort all reads should be equal to n(pow)2`() {
+        val n = BigDecimal.valueOf(30)
+        val givenDigits = 3
 
         val promRange = 1..10000
 
         val sortedLists = promRange.map {
-            target.sort(
-                generateUnorderedList().enableCount(), Comparator { o1, o2 -> o1.compareTo(o2) }
-            ).blockCount()
+            target.sort(generateUnorderedList(givenDigits, n.toShort()).enableCount(), longComparator)
+        }.toSet()
+
+        val expectedReads = n.pow(2)
+
+        println("Expected reads: $expectedReads")
+
+        sortedLists.forEach { sortedList ->
+            assertThat(sortedList.reads, equalTo(expectedReads.toLong()))
         }
+    }
+
+    @Test
+    fun `When sorting a set of lists with optimized sort the min reads should be less than or equal to (n(pow)2)(percentage)50`() {
+        val n = BigDecimal.valueOf(30)
+        val givenDigits = 6
+        val setRange = 1..10000
+
+        val sortedLists = setRange.map {
+            target.optimizedSort(
+                generateUnorderedList(givenDigits, n.toShort()).enableCount(),
+                Comparator { o1, o2 -> o1.compareTo(o2) }
+            ).blockCount()
+        }.toSet()
+
+        val minReads = sortedLists.map { it.reads }.minWith(longComparator) ?: 0
+        val expectedMinReadsLessThan = n.pow(2).times(BigDecimal.valueOf(0.5))
+
+        println("Real min reads: $minReads")
+        println("Expected min reads less than: $expectedMinReadsLessThan")
+
+        assertThat(minReads.toBigDecimal(), lessThan(expectedMinReadsLessThan))
+    }
+
+    @Test
+    fun `When sorting a set of lists with optimized sort the prom reads should be less than or equal to (n(pow)2)(percentage)86`() {
+        val n = BigDecimal.valueOf(30)
+        val givenDigits = 6
+        val promRange = 1..10000
+
+        val sortedLists = promRange.map {
+            target.optimizedSort(
+                generateUnorderedList(givenDigits, n.toShort()).enableCount(),
+                longComparator
+            )
+        }.toSet()
 
         val totalReadsCount = sortedLists.fold(0L) { acc, counterList ->
             acc.plus(counterList.reads)
@@ -65,13 +122,19 @@ class BubbleSortTest {
         val promReads = BigDecimal.valueOf(totalReadsCount)
             .divide(BigDecimal.valueOf(sortedLists.size.toLong()), MathContext.DECIMAL32)
 
-        val maxReads = sortedLists.maxWith(readsComparator)?.reads ?: 0
-        val minReads = sortedLists.minWith(readsComparator)?.reads ?: 0
-        val maxLimitReads = givenRangeSize.toBigDecimal().pow(2).longValueExact()
+        val expectedPromReadsLessThan = n.pow(2).times(BigDecimal.valueOf(0.86))
 
-        println("El máximo de lecturas posible es: $maxLimitReads")
-        println("El promedio de las lecturas es: $promReads")
-        println("La cantidad máxima de lecturas ha sido: $maxReads")
-        println("La cantidad mínima de lecturas ha sido: $minReads")
+        println("Real prom reads: $promReads")
+        println("Expected prom less than: $expectedPromReadsLessThan")
+
+        sortedLists.forEach { sortedList ->
+            sortedList.forEachIndexed { index, value ->
+                if (index < sortedList.lastIndex) assertThat(value, lessThanOrEqualTo(sortedList[index.inc()]))
+            }
+        }
+
+        assertThat(promReads, lessThan(expectedPromReadsLessThan))
     }
+
+    // Calculate percentiles
 }
